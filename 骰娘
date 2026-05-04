@@ -1,0 +1,200 @@
+
+// =============================
+// 🎲 COC 核心骰娘引擎
+// =============================
+
+const COC = {};
+
+// =============================
+// 🧾 角色结构
+// =============================
+COC.createChar = function(){
+    return {
+        STR:50,DEX:50,CON:50,APP:50,
+        INT:50,POW:50,SIZ:50,EDU:50,
+        SAN:60,LUCK:50,
+        HP:0,MP:0,
+        skills:{}
+    };
+};
+
+// =============================
+// ⚙️ 随机数
+// =============================
+COC.rand = (a,b)=>Math.floor(Math.random()*(b-a+1))+a;
+
+// =============================
+// 🎯 成功等级
+// =============================
+COC.check = function(r,v){
+    if(r <= v/5) return "极难成功";
+    if(r <= v/2) return "困难成功";
+    if(r <= v) return "成功";
+    return "失败";
+};
+
+// =============================
+// 🧠 属性/字段映射（check用）
+// =============================
+COC.attrMap = {
+    // 英文
+    str:"STR",dex:"DEX",con:"CON",app:"APP",
+    int:"INT",wis:"INT",
+    pow:"POW",siz:"SIZ",edu:"EDU",
+    san:"SAN",luck:"LUCK",
+
+    // 中文属性
+    力量:"STR",敏捷:"DEX",体质:"CON",
+    外貌:"APP",智力:"INT",灵感:"INT",
+    意志:"POW",体型:"SIZ",教育:"EDU",
+    幸运:"LUCK",运气:"LUCK",
+
+    hp:"HP",体力:"HP",
+    mp:"MP",魔法:"MP",
+
+    理智:"SAN",理智值:"SAN",san值:"SAN",
+
+    信用:"CREDIT",信誉:"CREDIT",信用评级:"CREDIT",
+    克苏鲁:"CTHULHU",克苏鲁神话:"CTHULHU"
+};
+
+// =============================
+// 🧾 技能列表（直接中文存储）
+// =============================
+COC.skillList = new Set([
+"侦查","聆听","潜行","追踪","读唇","图书馆使用","导航",
+"计算机使用Ω","取悦","话术","恐吓","说服","心理学",
+"格斗(斗殴)","射击(手枪)","射击(步/霰)","闪避","投掷",
+"爆破","炮术","急救","医学","精神分析","催眠",
+"攀爬","跳跃","游泳","潜水","估价","人类学","会计",
+"法律","历史","考古学","博物学","神秘学","电子学Ω",
+"乔装","妙手","锁匠","电气维修","机械维修","驯兽",
+"骑术","操作重型机械","汽车驾驶"
+]);
+
+// =============================
+// 🧾 .st 解析（只收中文字段）
+// =============================
+COC.parseST = function(text,char){
+
+    text = text.replace(/\n/g," ");
+
+    // 匹配：字段 + 数字
+    const regex = /([^\d\s]+)\s*(\d+)/g;
+
+    let m;
+
+    while((m = regex.exec(text)) !== null){
+
+        let key = m[1].trim();
+        let val = parseInt(m[2]);
+
+        // 属性
+        if(COC.attrMap[key]){
+            char[COC.attrMap[key]] = val;
+            continue;
+        }
+
+        // 技能（只收中文技能）
+        if(COC.skillList.has(key)){
+            char.skills[key] = val;
+        }
+    }
+
+    return char;
+};
+
+// =============================
+// 🔍 解析 .ra 输入（中英兼容）
+// =============================
+COC.resolveCheckTarget = function(char,input){
+
+    let k = input.toLowerCase();
+
+    // 属性
+    if(char[k.toUpperCase()] !== undefined){
+        return {
+            type:"attr",
+            value:char[k.toUpperCase()],
+            name:k.toUpperCase()
+        };
+    }
+
+    // 中文属性
+    if(COC.attrMap[input]){
+        let key = COC.attrMap[input];
+        if(char[key] !== undefined){
+            return {
+                type:"attr",
+                value:char[key],
+                name:key
+            };
+        }
+    }
+
+    // 技能（直接中文）
+    if(char.skills[input] !== undefined){
+        return {
+            type:"skill",
+            value:char.skills[input],
+            name:input
+        };
+    }
+
+    return null;
+};
+
+// =============================
+// 🎯 .ra / check 核心逻辑
+// =============================
+COC.ra = function(char,input){
+
+    let target = COC.resolveCheckTarget(char,input);
+
+    if(!target) return "未找到目标";
+
+    let r = COC.rand(1,100);
+    let result = COC.check(r,target.value);
+
+    return {
+        roll:r,
+        target:target.value,
+        result,
+        name:target.name
+    };
+};
+
+// =============================
+// 📚 技能成长
+// =============================
+COC.growth = function(char,skill,result){
+
+    if(result === "失败") return null;
+
+    let add = COC.rand(1,10);
+
+    if(char.skills[skill] !== undefined){
+        char.skills[skill] += add;
+    }
+
+    return {skill,add,newValue:char.skills[skill]};
+};
+
+// =============================
+// 🧠 SAN接口（基础版）
+// =============================
+COC.sanCheck = function(char,lose){
+
+    let r = COC.rand(1,100);
+    let result = COC.check(r,char.SAN);
+
+    if(r > char.SAN){
+        char.SAN -= lose;
+    }
+
+    return {
+        roll:r,
+        san:char.SAN,
+        result
+    };
+};
